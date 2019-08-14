@@ -179,7 +179,6 @@ public class MainActivity extends AppCompatActivity {
 
             double accX = event.values[0];
             double accY = event.values[1];
-            double accZ = event.values[2];
 
             double angleXY = Math.atan2(accY, accX) * 180 / Math.PI;
             sendAngleXY = String.format("%.0f", angleXY);
@@ -187,6 +186,12 @@ public class MainActivity extends AppCompatActivity {
             bt.send(sendAngleXY, true);
 
             Log.e("Log", "xy= " + sendAngleXY);
+
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
         @Override
