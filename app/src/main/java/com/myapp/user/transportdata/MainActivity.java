@@ -189,7 +189,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         try{
             //소켓 생성
             BluetoothSocket aduinoSocket = selectDevice.createRfcommSocketToServiceRecord(uuid);
-            //RMCOMM 채넣을 통한 연결
+            //RMCOMM 채널을 통한 연결
             aduinoSocket.connect();
 
         } catch (IOException e) {
@@ -199,7 +199,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void connectWithAdroid(BluetoothDevice selectDevice){
+        UUID uuid = UUID.fromString("000011001-0000-1000-8000-00805F9B34FB");
 
+        try{
+            //소켓 생성
+            BluetoothSocket androidSocket = selectDevice.createRfcommSocketToServiceRecord(uuid);
+            //RMCOMM 채널을 통한 연결
+            androidSocket.connect();
+
+        } catch (IOException e) {
+            Toast.makeText(this, "연결 실패", Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
+        }
     }
 
     @Override
