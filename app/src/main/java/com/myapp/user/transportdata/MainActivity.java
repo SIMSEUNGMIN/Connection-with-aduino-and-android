@@ -71,6 +71,44 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         //블루투스 사용 가능하도록 설정
         initBluetooth();
+
+//        //페어링된 기기 집합을 쿼리
+//        Set<BluetoothDevice> pairedDevices = btAdapter.getBondedDevices();
+//
+//        //if there are paired devices
+//        if(pairedDevices.size() > 0){
+//
+//            arrayAdapter = (ArrayAdapter)pairedDevices.get
+//
+//            //make paired devices list
+//            for(BluetoothDevice device : pairedDevices){
+//                //add the name and address to an array adapter to show in a Listview
+//                arrayAdapter.add(device.getName() + "\n" + device.getAddress());
+//            }
+//        }
+
+
+
+
+
+//        //Click the button to start Accelometer
+//        findViewById(R.id.btnStart).setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                //시작 코드
+//                mSensorManager.registerListener(mAccLis, mAccelometerSensor, SensorManager.SENSOR_DELAY_UI);
+//            }
+//        });
+
+//        //Click the button to end Accelometer
+//        findViewById(R.id.btnEnd).setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                //종료 코드
+//                mSensorManager.unregisterListener(mAccLis);
+//            }
+//        });
+
     }
 
     private void initPairedDevicesList() {
@@ -105,7 +143,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void getPairedDevices() {
         //연결하고자 하는 장치와 이미 페어링이 이루어져있다고 가정
-        Toast.makeText(this, "연결 가능한 기기 목록을 불러옵니다.", Toast.LENGTH_SHORT).show();
+        //Toast.makeText(this, "연결 가능한 기기 목록을 불러옵니다.", Toast.LENGTH_SHORT).show();
 
         Set<BluetoothDevice> pairedDevices = btAdapter.getBondedDevices();
 
@@ -113,6 +151,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //페어링된 장치가 있는 경우
             Toast.makeText(this, "연결 가능한 기기가 존재합니다.", Toast.LENGTH_SHORT).show();
 
+            for(BluetoothDevice device : pairedDevices){
+                // add the name and address to an array adapter to show in a ListView
+                arrayAdapter.add(device.getName() + "\n" + device.getAddress());
+            }
         }
         else{
             //페어링된 장치가 없는 경우
