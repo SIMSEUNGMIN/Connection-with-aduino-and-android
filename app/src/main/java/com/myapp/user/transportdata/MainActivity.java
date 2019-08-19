@@ -2,6 +2,7 @@ package com.myapp.user.transportdata;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.Sensor;
@@ -12,17 +13,22 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.Toast;
 
-import app.akexorcist.bluetotohspp.library.BluetoothSPP;
-import app.akexorcist.bluetotohspp.library.BluetoothState;
-import app.akexorcist.bluetotohspp.library.DeviceList;
+import java.util.Set;
 
-public class MainActivity extends AppCompatActivity {
+import static app.akexorcist.bluetotohspp.library.BluetoothState.REQUEST_ENABLE_BT;
 
-    //Using the bluetooth
-    private BluetoothSPP bt;
+public class MainActivity extends AppCompatActivity implements View.OnClickListener, AdapterView.OnItemClickListener {
+
+    //Layout
+    Button recvButton = null;
+    Button sendButton = null;
+    ListView pairedDevices = null;
 
     //Using the Accelometer & Gyroscoper
     private SensorManager mSensorManager = null;
@@ -34,78 +40,20 @@ public class MainActivity extends AppCompatActivity {
     //측정값
     String sendAngleXY = null;
 
+    //Using the bluetooth
+    private BluetoothAdapter btAdapter = null;
+
+    //paired devices
+    private ArrayAdapter<String> arrayAdapter = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //Usgin the bluetooth
-        bt = new BluetoothSPP(this); //initializing
-
-        //블루투스 사용 불가시
-        if(!bt.isBluetoothAvailable()){
-            Toast.makeText(getApplicationContext(),
-                    "Bluetooth is not available",
-                    Toast.LENGTH_SHORT).show();
-            finish();
-        }
-
-        //블루투스 데이터 수신
-        bt.setOnDataReceivedListener(new BluetoothSPP.OnDataReceivedListener() {
-            @Override
-            public void onDataReceived(byte[] data, String message) {
-                Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        //블루투스 연결 됐을 때
-        bt.setBluetoothConnectionListener(new BluetoothSPP.BluetoothConnectionListener() {
-            //연결시
-            @Override
-            public void onDeviceConnected(String name, String address) {
-                Toast.makeText(getApplicationContext(),
-                        "Connect to " + name + "\n" + address,
-                        Toast.LENGTH_SHORT).show();
-            }
-
-            //연결 해제시
-            @Override
-            public void onDeviceDisconnected() {
-                Toast.makeText(getApplicationContext(),
-                        "Connection lost", Toast.LENGTH_SHORT).show();
-            }
-
-            //연결 실패시
-            @Override
-            public void onDeviceConnectionFailed() {
-                Toast.makeText(getApplicationContext(),
-                        "Unable to connect", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        //연결 시도
-        Button btnConnect = findViewById(R.id.btnConnect);
-        btnConnect.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if(bt.getServiceState() == BluetoothState.STATE_CONNECTED){
-                    bt.disconnect();
-                }
-                else{
-                    Intent intent = new Intent(getApplicationContext(), DeviceList.class);
-                    startActivityForResult(intent, BluetoothState.REQUEST_CONNECT_DEVICE);
-                }
-            }
-        });
-
-        //연결 끊기
-        Button btnDisConnect = findViewById(R.id.btnDisConnect);
-        btnDisConnect.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                bt.disconnect();
-            }
-        });
+        recvButton = findViewById(R.id.RECVConnect);
+        sendButton = findViewById(R.id.SENDConnect);
+        pairedDevices = findViewById(R.id.pairedDevices);
 
         //Using the Gyroscope & Accelometer
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -114,63 +62,84 @@ public class MainActivity extends AppCompatActivity {
         mAccelometerSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         mAccLis = new AccelometerListener();
 
+        //buttton Event
+        recvButton.setOnClickListener(this);
+        sendButton.setOnClickListener(this);
 
-        //Click the button to start Accelometer
-        findViewById(R.id.btnStart).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mSensorManager.registerListener(mAccLis, mAccelometerSensor, SensorManager.SENSOR_DELAY_UI);
-            }
-        });
+        //ListView 초기화
+        initPairedDevicesList();
 
-        //Click the button to end Accelometer
-        findViewById(R.id.btnEnd).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mSensorManager.unregisterListener(mAccLis);
-            }
-        });
+        //블루투스 사용 가능하도록 설정
+        initBluetooth();
     }
 
-    public void onDestroy(){
-        super.onDestroy();
-        bt.stopService();
+    private void initPairedDevicesList() {
+
+//        //일단 목록 숨기기
+//        pairedDevices.setVisibility(View.INVISIBLE);
+
+        arrayAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1);
+        pairedDevices.setAdapter(arrayAdapter);
+        pairedDevices.setOnItemClickListener(this);
     }
 
-    public void onStart(){
-        super.onStart();
-        if(!bt.isBluetoothEnabled()){
-            Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            startActivityForResult(intent, BluetoothState.REQUEST_ENABLE_BT);
+    private void initBluetooth() {
+        //블루투스를 지원하는지 확인
+        btAdapter = BluetoothAdapter.getDefaultAdapter();
+
+        if(btAdapter == null){
+            //device does not support Bluetooth
+            Toast.makeText(this, "블루투스 사용 불가능", Toast.LENGTH_SHORT).show();
+        }
+
+        //블루투스 활성화 확인
+        if(!btAdapter.isEnabled()){
+            //비활성화시 활성화
+            Toast.makeText(this, "블루투스를 활성화시킵니다.", Toast.LENGTH_SHORT).show();
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+
+        Toast.makeText(this, "블루투스가 활성화 되어있습니다.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void getPairedDevices() {
+        //연결하고자 하는 장치와 이미 페어링이 이루어져있다고 가정
+        Toast.makeText(this, "연결 가능한 기기 목록을 불러옵니다.", Toast.LENGTH_SHORT).show();
+
+        Set<BluetoothDevice> pairedDevices = btAdapter.getBondedDevices();
+
+        if(pairedDevices.size() > 0){
+            //페어링된 장치가 있는 경우
+            Toast.makeText(this, "연결 가능한 기기가 존재합니다.", Toast.LENGTH_SHORT).show();
+
         }
         else{
-            if(!bt.isServiceAvailable()){
-                bt.setupService();
-                bt.startService(BluetoothState.DEVICE_OTHER); //DEVICE_ANDROID는 안드로이드끼리
-            }
-        }
-    }
-
-    public void onActivityResult(int requestCode, int resultCode, Intent data){
-        if(requestCode == BluetoothState.REQUEST_CONNECT_DEVICE){
-            if(resultCode == Activity.RESULT_OK) {
-                bt.connect(data);
-            }
-        }
-        else if(requestCode == BluetoothState.REQUEST_ENABLE_BT){
-            if(resultCode == Activity.RESULT_OK){
-                bt.setupService();
-                bt.startService(BluetoothState.DEVICE_OTHER);
-            }
-            else{
-                Toast.makeText(getApplicationContext(),
-                        "Bluetooth was not enabled.",
-                        Toast.LENGTH_SHORT).show();
-                finish();
-            }
+            //페어링된 장치가 없는 경우
+            Toast.makeText(this, "연결 가능한 기기가 없습니다.", Toast.LENGTH_SHORT).show();
 
         }
     }
+
+    @Override
+    public void onClick(View v){
+        switch (v.getId()){
+            case R.id.RECVConnect:
+                //페어링된 원격 디바이스 목록 구하기
+                getPairedDevices();
+                break;
+            case R.id.SENDConnect:
+                //페어링된 원격 디바이스 목록 구하기
+                getPairedDevices();
+                break;
+        }
+    }
+
+    @Override
+    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+
+    }
+
 
     private class AccelometerListener implements SensorEventListener {
 
@@ -183,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
             double angleXY = Math.atan2(accY, accX) * 180 / Math.PI;
             sendAngleXY = String.format("%.0f", angleXY);
 
-            bt.send(sendAngleXY, true);
+            //recvbt.send(sendAngleXY, true);
 
             Log.e("Log", "xy= " + sendAngleXY);
 
