@@ -1,34 +1,34 @@
 package com.myapp.user.transportdata;
 
-import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.ListView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import static app.akexorcist.bluetotohspp.library.BluetoothState.REQUEST_ENABLE_BT;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener, AdapterView.OnItemClickListener {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
     //Layout
     Button recvButton = null;
     Button sendButton = null;
-    ListView pairedDevices = null;
 
     //Using the Accelometer & Gyroscoper
     private SensorManager mSensorManager = null;
@@ -53,7 +53,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         recvButton = findViewById(R.id.RECVConnect);
         sendButton = findViewById(R.id.SENDConnect);
-        pairedDevices = findViewById(R.id.pairedDevices);
 
         //Using the Gyroscope & Accelometer
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -66,30 +65,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         recvButton.setOnClickListener(this);
         sendButton.setOnClickListener(this);
 
-        //ListView 초기화
-        initPairedDevicesList();
-
         //블루투스 사용 가능하도록 설정
         initBluetooth();
-
-//        //페어링된 기기 집합을 쿼리
-//        Set<BluetoothDevice> pairedDevices = btAdapter.getBondedDevices();
-//
-//        //if there are paired devices
-//        if(pairedDevices.size() > 0){
-//
-//            arrayAdapter = (ArrayAdapter)pairedDevices.get
-//
-//            //make paired devices list
-//            for(BluetoothDevice device : pairedDevices){
-//                //add the name and address to an array adapter to show in a Listview
-//                arrayAdapter.add(device.getName() + "\n" + device.getAddress());
-//            }
-//        }
-
-
-
-
 
 //        //Click the button to start Accelometer
 //        findViewById(R.id.btnStart).setOnClickListener(new View.OnClickListener() {
@@ -109,16 +86,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 //            }
 //        });
 
-    }
-
-    private void initPairedDevicesList() {
-
-//        //일단 목록 숨기기
-//        pairedDevices.setVisibility(View.INVISIBLE);
-
-        arrayAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1);
-        pairedDevices.setAdapter(arrayAdapter);
-        pairedDevices.setOnItemClickListener(this);
     }
 
     private void initBluetooth() {
@@ -151,10 +118,29 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //페어링된 장치가 있는 경우
             Toast.makeText(this, "연결 가능한 기기가 존재합니다.", Toast.LENGTH_SHORT).show();
 
+            //Use the AlertDialog that print the paired devices list
+            AlertDialog.Builder btBuilder = new AlertDialog.Builder(this);
+            btBuilder.setTitle("블루투스 장치 선택");
+
+            //페어링 된 블루투스 장치의 이름 목록 작성
+            List<String> pairedDevicesList = new ArrayList<String>();
+
             for(BluetoothDevice device : pairedDevices){
-                // add the name and address to an array adapter to show in a ListView
-                arrayAdapter.add(device.getName() + "\n" + device.getAddress());
+                pairedDevicesList.add(device.getName() + "\n" + device.getAddress());
             }
+
+            CharSequence[] devices = pairedDevicesList.toArray(new CharSequence[pairedDevicesList.size()]);
+
+            btBuilder.setItems(devices, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int number) {
+                    //연결할 장치를 눌렀을 경우 선택한 장치와 연결을 시도
+                    
+                }
+            });
+
+            AlertDialog deviceList = btBuilder.create();
+            deviceList.show();
         }
         else{
             //페어링된 장치가 없는 경우
@@ -175,11 +161,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 getPairedDevices();
                 break;
         }
-    }
-
-    @Override
-    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-
     }
 
 

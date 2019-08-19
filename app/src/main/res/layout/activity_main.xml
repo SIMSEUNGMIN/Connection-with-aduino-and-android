@@ -28,11 +28,5 @@
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/RECVConnect"/>
 
-    <ListView
-        android:id="@+id/pairedDevices"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
-
-
 
 </android.support.constraint.ConstraintLayout>
