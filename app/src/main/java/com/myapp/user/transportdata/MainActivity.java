@@ -15,11 +15,13 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Toast;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -32,6 +34,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     //Layout
     Button recvButton = null;
     Button sendButton = null;
+    Button transButton = null;
 
     //Using the Accelometer & Gyroscoper
     private SensorManager mSensorManager = null;
@@ -52,6 +55,28 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     //페어링 된 블루투스 장치의 이름, 맥주소 목록
     List<String> pairedDevicesList = null;
 
+    //UUID
+    UUID uuid = UUID.fromString("000011001-0000-1000-8000-00805F9B34FB");
+
+    //블루투스 소켓 생성
+    BluetoothSocket aduinoSocket = null;
+    BluetoothSocket androidSocket = null;
+
+    //아두이노를 위한 수신 스트림
+    InputStream aduinoInputStream = null;
+
+    //안드로이드를 위한 송신 스트림
+    OutputStream androidOutputStream = null;
+
+    //수신용 스레드
+    Thread recvThread = null;
+
+    //버퍼 내 수신 문자 저장 위치
+    int readBufferPosition = 0;
+
+    //수신 버퍼
+    byte[] readBuffer = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -59,6 +84,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         recvButton = findViewById(R.id.RECVConnect);
         sendButton = findViewById(R.id.SENDConnect);
+        transButton = findViewById(R.id.TRANSData);
 
         //Using the Gyroscope & Accelometer
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -70,6 +96,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //buttton Event
         recvButton.setOnClickListener(this);
         sendButton.setOnClickListener(this);
+        transButton.setOnClickListener(this);
 
         //블루투스 사용 가능하도록 설정
         initBluetooth();
@@ -116,7 +143,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void getPairedDevices(final int numberOfId) {
         //연결하고자 하는 장치와 이미 페어링이 이루어져있다고 가정
-        //Toast.makeText(this, "연결 가능한 기기 목록을 불러옵니다.", Toast.LENGTH_SHORT).show();
 
         pairedDevices = btAdapter.getBondedDevices();
 
@@ -140,8 +166,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             btBuilder.setItems(devices, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int number) {
-                    //연결하고자 하는 장치의  bluetoothDevice 객체 불러오기
+                    //연결하고자 하는 장치의  bluetoothDevice 객체 불러오기(client)
                     BluetoothDevice selectDevice = getDevice(pairedDevicesList.get(number));
+                    System.out.println(selectDevice.getName());
 
                     //RECV일 경우 아두이노와 연결
                     //SEND일 경우 안드로이드와 연결
@@ -151,7 +178,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     else{
                         connectWithAdroid(selectDevice);
                     }
-
                 }
             });
 
@@ -184,34 +210,101 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void connectWithAduino(BluetoothDevice selectDevice){
-        UUID uuid = UUID.fromString("000011001-0000-1000-8000-00805F9B34FB");
+
+        //이미 연결되어 있는 경우
+        if(aduinoSocket != null){
+            Toast.makeText(this, "이미 연결되어 있습니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         try{
-            //소켓 생성
-            BluetoothSocket aduinoSocket = selectDevice.createRfcommSocketToServiceRecord(uuid);
+            //소켓 생성(Server)
+            aduinoSocket = selectDevice.createRfcommSocketToServiceRecord(uuid);
+
+            try {
+                aduinoSocket =(BluetoothSocket) selectDevice.getClass().getMethod("createRfcommSocket", new Class[] {int.class}).invoke(selectDevice,1);
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            } catch (InvocationTargetException e) {
+                e.printStackTrace();
+            } catch (NoSuchMethodException e) {
+                e.printStackTrace();
+            }
+
             //RMCOMM 채널을 통한 연결
             aduinoSocket.connect();
 
+            //데이터 수신을 위한 스트림 열기
+            aduinoInputStream = aduinoSocket.getInputStream();
+
+            Toast.makeText(this, "데이터 수신 가능", Toast.LENGTH_SHORT).show();
+
         } catch (IOException e) {
+            //블루투스 연결 중 오류 발생
             Toast.makeText(this, "연결 실패", Toast.LENGTH_SHORT).show();
             e.printStackTrace();
         }
     }
 
     private void connectWithAdroid(BluetoothDevice selectDevice){
-        UUID uuid = UUID.fromString("000011001-0000-1000-8000-00805F9B34FB");
+
+        //이미 연결 되어있는 경우
+        if(androidSocket != null){
+            Toast.makeText(this, "이미 연결되어 있습니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
         try{
-            //소켓 생성
-            BluetoothSocket androidSocket = selectDevice.createRfcommSocketToServiceRecord(uuid);
+            //소켓 생성(Server)
+            androidSocket = selectDevice.createRfcommSocketToServiceRecord(uuid);
+
+            try {
+                androidSocket =(BluetoothSocket) selectDevice.getClass().getMethod("createRfcommSocket", new Class[] {int.class}).invoke(selectDevice,1);
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            } catch (InvocationTargetException e) {
+                e.printStackTrace();
+            } catch (NoSuchMethodException e) {
+                e.printStackTrace();
+            }
+
             //RMCOMM 채널을 통한 연결
             androidSocket.connect();
 
+            //데이터 송신을 위한 스트림 열기
+            androidOutputStream = androidSocket.getOutputStream();
+
+            Toast.makeText(this, "데이터 송신 가능", Toast.LENGTH_SHORT).show();
+
+            //데이터 송신 준비
+
+
         } catch (IOException e) {
+            //블루투스 연결 중 오류 발생
             Toast.makeText(this, "연결 실패", Toast.LENGTH_SHORT).show();
+            System.out.println(e);
             e.printStackTrace();
         }
     }
+
+//    //아두이노의 데이터 수신 (수신되는 메세지를 계속 검사)
+//    private void beginTransData() {
+//        //버퍼 내 수신 문자 저장 위치
+//        readBufferPosition = 0;
+//        readBuffer = new byte[1024];
+//
+//        //문자열 수신 스레드
+//        recvThread = new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//                while(true){
+//
+//
+//                }
+//            }
+//        });
+//
+//    }
 
     @Override
     public void onClick(View v){
@@ -224,7 +317,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 //페어링된 원격 디바이스 목록 구하기
                 getPairedDevices(v. getId());
                 break;
+            case R.id.TRANSData:
+               //beginTransData();
         }
+    }
+
+    protected  void onDestory(){
+        //어플리케이션 종료시
+        try {
+            //스트림 닫기
+            androidOutputStream.close();
+            aduinoInputStream.close();
+            //소켓 닫기
+            androidSocket.close();
+            aduinoSocket.close();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        super.onDestroy();
     }
 
 
