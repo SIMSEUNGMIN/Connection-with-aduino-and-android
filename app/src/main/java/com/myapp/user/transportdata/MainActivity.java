@@ -23,7 +23,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -74,12 +73,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     //수신용 스레드
     Thread recvThread = null;
 
-    //버퍼 내 수신 문자 저장 위치
-    int readBufferPosition = 0;
-
-    //수신 버퍼
-    byte[] readBuffer = null;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -103,25 +96,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         //블루투스 사용 가능하도록 설정
         initBluetooth();
-
-//        //Click the button to start Accelometer
-//        findViewById(R.id.btnStart).setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                //시작 코드
-//                mSensorManager.registerListener(mAccLis, mAccelometerSensor, SensorManager.SENSOR_DELAY_UI);
-//            }
-//        });
-
-//        //Click the button to end Accelometer
-//        findViewById(R.id.btnEnd).setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                //종료 코드
-//                mSensorManager.unregisterListener(mAccLis);
-//            }
-//        });
-
     }
 
     private void initBluetooth() {
@@ -292,9 +266,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     //아두이노의 데이터 수신 (수신되는 메세지를 계속 검사)
     private void beginTransData() {
-//        //버퍼 내 수신 문자 저장 위치
-//        readBufferPosition = 0;
-//        readBuffer = new byte[1024];
+
+        //핸들 측정 시작
+        mSensorManager.registerListener(mAccLis, mAccelometerSensor, SensorManager.SENSOR_DELAY_UI);
 
         //데이터 수신 스레드 생성, 시작
         recvThread = new RecvThead(aduinoInputStream, aduinoOutputStream, androidOutputStream);
@@ -303,8 +277,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     //데이터 송신
-    private void sendData(OutputStream output){
-        String msg = "o";
+    private void sendData(OutputStream output, String msg){
         try {
             output.write(msg.getBytes());
         } catch (IOException e) {
@@ -333,9 +306,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             System.out.println("쓰레드 시작했습니다.");
 
             while(true){
-
                 //값을 얻기 위해서 먼저 아두이노로 신호를 보내줌
-                sendData(aduinoOutput);
+                sendData(aduinoOutput, "o");
 
                 //신호를 보내고 나서 신호의 답이 올 때까지 기다림 (소문자 o를 잡을 때까지)
                 while(true){
@@ -348,14 +320,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
                     if(((int)check[0]) == 111){
                         //소문자 o가 들어왔을 경우
-
-//                        //길이가 들어올 수 있도록 sleep
-//                        try {
-//                            Thread.sleep(1);
-//                        } catch (InterruptedException e) {
-//                            e.printStackTrace();
-//                        }
-
                         break;
                     }
 
@@ -385,8 +349,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
                    bufferString = new String(buffer);
 
-                   System.out.println("들어온 값 : " + bufferString);
+                   bufferString = sendAngleXY + " " + bufferString;
 
+                   System.out.println(bufferString);
+
+                   //sendData(androidOutput, bufferString);
 
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -418,18 +385,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //스트림 닫기
             androidOutputStream.close();
             aduinoInputStream.close();
+            aduinoOutputStream.close();
+
             //소켓 닫기
             androidSocket.close();
             aduinoSocket.close();
 
             //쓰레드 닫기
-            //recvThread.
+            recvThread.interrupt();
+
+            //핸들 측정 닫기
+            mSensorManager.unregisterListener(mAccLis);
 
         } catch (IOException e) {
             e.printStackTrace();
         }
-
-
     }
 
 
@@ -444,15 +414,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             double angleXY = Math.atan2(accY, accX) * 180 / Math.PI;
             sendAngleXY = String.format("%.0f", angleXY);
 
-            //recvbt.send(sendAngleXY, true);
-
-            Log.e("Log", "xy= " + sendAngleXY);
-
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            //Log.e("Log", "xy= " + sendAngleXY);
         }
 
         @Override
