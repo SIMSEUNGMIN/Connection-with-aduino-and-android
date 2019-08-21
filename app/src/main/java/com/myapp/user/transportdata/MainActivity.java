@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -64,6 +65,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     //아두이노를 위한 수신 스트림
     InputStream aduinoInputStream = null;
+    //아두이노를 위한 송신 스트림
+    OutputStream aduinoOutputStream = null;
 
     //안드로이드를 위한 송신 스트림
     OutputStream androidOutputStream = null;
@@ -222,7 +225,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             aduinoSocket = selectDevice.createRfcommSocketToServiceRecord(uuid);
 
             try {
-                aduinoSocket =(BluetoothSocket) selectDevice.getClass().getMethod("createRfcommSocket", new Class[] {int.class}).invoke(selectDevice,1);
+                aduinoSocket = (BluetoothSocket) selectDevice.getClass().getMethod("createRfcommSocket", new Class[] {int.class}).invoke(selectDevice,1);
             } catch (IllegalAccessException e) {
                 e.printStackTrace();
             } catch (InvocationTargetException e) {
@@ -234,8 +237,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //RMCOMM 채널을 통한 연결
             aduinoSocket.connect();
 
-            //데이터 수신을 위한 스트림 열기
+            //데이터 수신 스트림 열기
             aduinoInputStream = aduinoSocket.getInputStream();
+
+            //데이터 송신을 위한 스트림 열기
+            aduinoOutputStream = aduinoSocket.getOutputStream();
 
             Toast.makeText(this, "데이터 수신 가능", Toast.LENGTH_SHORT).show();
 
@@ -276,9 +282,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
             Toast.makeText(this, "데이터 송신 가능", Toast.LENGTH_SHORT).show();
 
-            //데이터 송신 준비
-
-
         } catch (IOException e) {
             //블루투스 연결 중 오류 발생
             Toast.makeText(this, "연결 실패", Toast.LENGTH_SHORT).show();
@@ -287,24 +290,110 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-//    //아두이노의 데이터 수신 (수신되는 메세지를 계속 검사)
-//    private void beginTransData() {
+    //아두이노의 데이터 수신 (수신되는 메세지를 계속 검사)
+    private void beginTransData() {
 //        //버퍼 내 수신 문자 저장 위치
 //        readBufferPosition = 0;
 //        readBuffer = new byte[1024];
-//
-//        //문자열 수신 스레드
-//        recvThread = new Thread(new Runnable() {
-//            @Override
-//            public void run() {
-//                while(true){
-//
-//
-//                }
-//            }
-//        });
-//
-//    }
+
+        //데이터 수신 스레드 생성, 시작
+        recvThread = new RecvThead(aduinoInputStream, aduinoOutputStream, androidOutputStream);
+        recvThread.start();
+
+    }
+
+    //데이터 송신
+    private void sendData(OutputStream output){
+        String msg = "o";
+        try {
+            output.write(msg.getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private class RecvThead extends Thread{
+        private InputStream aduinoInput; //수신 스트림(아두이노에서 받는 데이터)
+        private OutputStream aduinoOutput; //송신 스트림(아두이노)
+        private OutputStream androidOutput; // 송신 스트림 (안드로이드)
+
+        private RecvThead(InputStream aduinoInput, OutputStream aduinoOutput, OutputStream androidOutput) {
+            this.aduinoInput = aduinoInput;
+            this.aduinoOutput = aduinoOutput;
+            this.androidOutput = androidOutput;
+        }
+
+        public void run(){
+            byte[] check = new byte[1]; //데이터 수신을 위한 체크 바이트
+            byte[] dataLen = new byte[1]; //아두이노의 String 길이
+            int dataLenInt = 0; //아두이노 들어온 String 을 int로 표현
+            byte[] buffer = null; //아두이노의 데이터를 담을 버퍼
+            String bufferString = null; //버퍼의 데이터를 String형태로 바꿈
+
+            System.out.println("쓰레드 시작했습니다.");
+
+            while(true){
+
+                //값을 얻기 위해서 먼저 아두이노로 신호를 보내줌
+                sendData(aduinoOutput);
+
+                //신호를 보내고 나서 신호의 답이 올 때까지 기다림 (소문자 o를 잡을 때까지)
+                while(true){
+                    //소문자 o가 안 들어오면 계속 돌고 들어오면 break;
+                    try {
+                        aduinoInput.read(check);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+                    if(((int)check[0]) == 111){
+                        //소문자 o가 들어왔을 경우
+
+//                        //길이가 들어올 수 있도록 sleep
+//                        try {
+//                            Thread.sleep(1);
+//                        } catch (InterruptedException e) {
+//                            e.printStackTrace();
+//                        }
+
+                        break;
+                    }
+
+                    //들어오지 않으면 계속 돈다
+                }
+
+                try {
+
+                    //check 다음 1byte를 가져온다 (아두이노의 String 길이를 알기 위해서)
+                    aduinoInput.read(dataLen);
+
+                    //int 형으로 만들기
+                    dataLenInt = (((int)dataLen[0]) - 48);
+
+                    //아두이노의 데이터 크기 만큼 버퍼를 생성
+                    buffer = new byte[dataLenInt];
+
+                    //뒤의 데이터가 들어올 수 있도록 sleep
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    //버퍼의 크기만큼 데이터를 읽어옴
+                    aduinoInput.read(buffer);
+
+                   bufferString = new String(buffer);
+
+                   System.out.println("들어온 값 : " + bufferString);
+
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
 
     @Override
     public void onClick(View v){
@@ -318,11 +407,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 getPairedDevices(v. getId());
                 break;
             case R.id.TRANSData:
-               //beginTransData();
+               beginTransData();
         }
     }
 
     protected  void onDestory(){
+        super.onDestroy();
         //어플리케이션 종료시
         try {
             //스트림 닫기
@@ -332,11 +422,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             androidSocket.close();
             aduinoSocket.close();
 
+            //쓰레드 닫기
+            //recvThread.
+
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        super.onDestroy();
+
     }
 
 
